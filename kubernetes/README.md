@@ -41,3 +41,49 @@ Here, the user describes the final desired state, and Kubernetes automatically m
 Imperative = Tell Kubernetes HOW to do something manually.
 
 Declarative = Tell Kubernetes WHAT final state is needed.
+
+## Self-Healing in Kubernetes
+
+Kubernetes provides self-healing capabilities through Deployments and ReplicaSets.
+
+If a Pod crashes or gets deleted manually, Kubernetes automatically creates a replacement Pod to maintain the desired number of replicas.
+
+Example:
+kubectl delete pod <pod-name> -n dev
+
+After deletion, Kubernetes automatically recreates the Pod.
+
+### How Self-Healing Works
+
+Deployment
+↓
+ReplicaSet monitors desired replicas
+↓
+Missing Pod detected
+↓
+New Pod created automatically
+
+---
+
+## Rolling Updates
+
+Rolling updates allow Kubernetes to update application versions gradually without downtime.
+
+Old Pods are replaced with new Pods one by one while keeping the application available to users.
+
+Example:
+kubectl set image deployment/nginx-deployment nginx=nginx:1.25 -n dev
+
+### Benefits
+
+* Zero downtime deployments
+* Safer production upgrades
+* Easy rollback support
+
+---
+
+## Important Understanding
+
+Self-healing handles failures automatically.
+
+Rolling updates handle application upgrades gradually.
