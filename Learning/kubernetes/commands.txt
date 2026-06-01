@@ -1,0 +1,9 @@
+# Kubernetes Commands
+
+kubectl version
+
+kubectl get nodes
+
+kubectl get pods -A
+
+kubectl cluster-info
