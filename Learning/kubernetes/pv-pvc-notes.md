@@ -1,10 +1,10 @@
-# Kubernetes Persistent Volumes (PV) & Persistent Volume Claims (PVC)
+# Kubernetes Persistent Volumes (PV) and Persistent Volume Claims (PVC)
 
 ## Why Do We Need Persistent Storage?
 
-Pods are temporary.
+Pods are temporary resources in Kubernetes.
 
-If a Pod is deleted or recreated, any data stored inside the Pod is lost.
+If a Pod is deleted, restarted, or recreated, any data stored inside the Pod's filesystem is lost.
 
 Persistent storage ensures data survives Pod restarts and replacements.
 
@@ -16,18 +16,22 @@ A Persistent Volume (PV) is a storage resource in Kubernetes that exists indepen
 
 Characteristics:
 
-- Persistent storage
-- Survives Pod deletion
-- Can be reused
-- Managed by Kubernetes
+* Persistent storage
+* Independent of Pod lifecycle
+* Can be reused by applications
+* Managed by Kubernetes
 
 Example:
 
+```text
 Pod
-↓
-Persistent Volume
-↓
+ ↓
+PV
+ ↓
 Disk Storage
+```
+
+Even if the Pod is deleted, the PV continues to exist.
 
 ---
 
@@ -35,58 +39,205 @@ Disk Storage
 
 A Persistent Volume Claim (PVC) is a request for storage made by an application.
 
-Instead of directly using a PV, Pods use PVCs.
+Instead of directly using a PV, Pods consume storage through PVCs.
 
 Characteristics:
 
-- Requests storage
-- Specifies storage size
-- Binds to an available PV
+* Requests storage
+* Specifies required size
+* Binds to a matching PV
+* Used by Pods
 
 Example:
 
+```text
 PVC Request
-↓
+ ↓
 PV
-↓
+ ↓
 Storage
+```
 
 ---
 
-## Relationship Between PV and PVC
+## PV-PVC Binding Process
+
+Kubernetes automatically binds a PVC to a suitable PV.
+
+Example:
+
+PVC requests:
+
+* 10 GB storage
+
+Available PV:
+
+* 20 GB storage
+
+Kubernetes binds the PVC to the PV.
 
 Flow:
 
+```text
 Pod
-↓
+ ↓
 PVC
-↓
+ ↓
 PV
-↓
-Disk
+ ↓
+Disk Storage
+```
 
-The Pod uses the PVC, and the PVC is connected to a PV.
+---
+
+## Data Persistence Example
+
+Initial State:
+
+```text
+Pod A
+ ↓
+PVC
+ ↓
+PV
+ ↓
+customer-data.txt
+```
+
+Pod A crashes:
+
+```text
+Pod A ❌
+```
+
+Kubernetes creates:
+
+```text
+Pod B
+ ↓
+PVC
+ ↓
+Same PV
+ ↓
+customer-data.txt ✅
+```
+
+The file remains available because the PV exists independently of the Pod lifecycle.
 
 ---
 
 ## PV vs PVC
 
-| Persistent Volume (PV) | Persistent Volume Claim (PVC) |
-|------------------------|-------------------------------|
-| Actual storage resource | Request for storage |
-| Created by admin | Created by user/application |
-| Provides storage | Consumes storage |
-| Exists independently | Binds to a PV |
+| PV                        | PVC                         |
+| ------------------------- | --------------------------- |
+| Actual storage resource   | Request for storage         |
+| Created by admin/platform | Created by user/application |
+| Provides storage          | Consumes storage            |
+| Independent resource      | Binds to a PV               |
 
 ---
 
 ## Real-World Analogy
 
-PV = Storage Locker
+PV = Bank Locker
 
-PVC = Request Form For Locker
+PVC = Locker Request Form
 
-Pod = Person Using Locker
+Pod = Customer Using the Locker
+
+Flow:
+
+```text
+Customer (Pod)
+ ↓
+Request Form (PVC)
+ ↓
+Locker (PV)
+```
+
+---
+
+## Why Don't Pods Directly Use PVs?
+
+Pods request storage through PVCs.
+
+PVCs abstract storage provisioning from storage consumption.
+
+Applications do not need to know:
+
+* Which storage backend is used
+* Which disk is allocated
+* How storage is provisioned
+
+Pods simply request storage through PVCs.
+
+---
+
+## Access Modes
+
+### ReadWriteOnce (RWO)
+
+Storage can be mounted as read-write by one node.
+
+---
+
+### ReadOnlyMany (ROX)
+
+Multiple Pods can read the storage.
+
+---
+
+### ReadWriteMany (RWX)
+
+Multiple Pods can read and write to the same storage.
+
+---
+
+## Interview Questions
+
+### What problem do Persistent Volumes solve?
+
+Persistent Volumes provide storage that survives Pod deletion and recreation.
+
+---
+
+### What is a Persistent Volume?
+
+A Persistent Volume is a Kubernetes storage resource that exists independently of the Pod lifecycle.
+
+---
+
+### What is a Persistent Volume Claim?
+
+A Persistent Volume Claim is a request for storage made by an application.
+
+---
+
+### Explain the PV-PVC flow.
+
+```text
+Pod
+ ↓
+PVC
+ ↓
+PV
+ ↓
+Disk Storage
+```
+
+---
+
+### What is the difference between PV and PVC?
+
+PV is the actual storage resource.
+
+PVC is the request for storage.
+
+---
+
+### Why do Pods use PVC instead of directly using PV?
+
+PVC separates storage consumption from storage provisioning and allows Kubernetes to automatically bind suitable storage resources.
 
 ---
 
@@ -98,4 +249,4 @@ Persistent Volumes provide long-term storage.
 
 Persistent Volume Claims request and consume Persistent Volumes.
 
-Data stored in PVs survives Pod restarts and replacements.
+Data stored in PVs survives Pod restarts and Pod replacements.
