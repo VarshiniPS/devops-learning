@@ -7,3 +7,43 @@ kubectl get nodes
 kubectl get pods -A
 
 kubectl cluster-info
+
+# Kubernetes Resource Requests and Limits
+
+# Create Pod
+
+kubectl apply -f requests-limits.yaml
+
+# View Pods
+
+kubectl get pods
+
+# Describe Pod
+
+kubectl describe pod nginx-resources
+
+# Delete Pod
+
+kubectl delete pod nginx-resources
+
+# Validate YAML
+
+kubectl apply --dry-run=client -f requests-limits.yaml
+
+# View Pod Resource Configuration
+
+kubectl describe pod nginx-resources
+
+# View Events
+
+kubectl get events
+
+# View Node Capacity
+
+kubectl describe node <node-name>
+
+# View Resource Usage (Metrics Server Required)
+
+kubectl top pod
+kubectl top node
+
