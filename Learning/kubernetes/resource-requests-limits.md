@@ -2,50 +2,73 @@
 
 ## Why Do We Need Requests and Limits?
 
-Kubernetes runs multiple Pods on worker nodes.
+Requests and Limits prevent a single Pod from consuming excessive CPU or memory and affecting other Pods on the node.
 
-If resource usage is not controlled, a single Pod can consume excessive CPU or memory and impact other applications running on the same node.
+Benefits:
 
-Resource Requests and Limits help ensure fair resource allocation and improve cluster stability.
+* Prevent noisy neighbor problems
+* Prevent resource starvation
+* Improve scheduling decisions
+* Protect node stability
 
 ---
 
-## Resource Requests
+# Resource Request
 
-A Request defines the minimum amount of CPU and memory that Kubernetes guarantees to a container.
+A Request is the minimum guaranteed CPU or memory a container receives.
 
-The Kubernetes Scheduler uses Requests to determine where a Pod can be scheduled.
+Example:
 
-### Example
+```yaml
+requests:
+  cpu: "250m"
+  memory: "256Mi"
+```
+
+Meaning:
+
+* Kubernetes Scheduler uses Requests for scheduling.
+* The container is guaranteed these resources.
+
+---
+
+# Resource Limit
+
+A Limit is the maximum CPU or memory a container can consume.
+
+Example:
+
+```yaml
+limits:
+  cpu: "500m"
+  memory: "512Mi"
+```
+
+Meaning:
+
+* Container can use resources up to this value.
+* Kubernetes enforces the limit.
+
+---
+
+# Requests vs Limits
+
+| Request                      | Limit                             |
+| ---------------------------- | --------------------------------- |
+| Minimum guaranteed resources | Maximum allowed resources         |
+| Used by Scheduler            | Used by Kubernetes enforcement    |
+| Determines Pod placement     | Prevents resource overconsumption |
+
+---
+
+# Example
 
 ```yaml
 resources:
   requests:
     cpu: "250m"
     memory: "256Mi"
-```
 
-Meaning:
-
-```text
-CPU    : 0.25 CPU Core
-Memory : 256 MiB
-```
-
-The Scheduler will place the Pod only on a node that has at least these resources available.
-
----
-
-## Resource Limits
-
-A Limit defines the maximum amount of CPU and memory a container can consume.
-
-The container cannot exceed the configured limit.
-
-### Example
-
-```yaml
-resources:
   limits:
     cpu: "500m"
     memory: "512Mi"
@@ -53,168 +76,144 @@ resources:
 
 Meaning:
 
-```text
-CPU    : Maximum 0.5 CPU Core
-Memory : Maximum 512 MiB
-```
+* Guaranteed CPU = 250m
+
+* Maximum CPU = 500m
+
+* Guaranteed Memory = 256Mi
+
+* Maximum Memory = 512Mi
 
 ---
 
-## Requests vs Limits
-
-| Requests                            | Limits                                  |
-| ----------------------------------- | --------------------------------------- |
-| Minimum guaranteed resources        | Maximum allowed resources               |
-| Used by Scheduler for Pod placement | Enforced during runtime                 |
-| Helps reserve resources             | Prevents excessive resource consumption |
-
-### Simple Analogy
-
-```text
-Request = Reserved Seat
-Limit = Maximum Capacity
-```
+# CPU Limit Exceeded
 
 Example:
 
 ```text
-Request CPU = 250m
-Limit CPU = 500m
-```
-
-The Pod is guaranteed 250m CPU but can use up to 500m CPU.
-
----
-
-## CPU Limit Behavior
-
-If a container exceeds its CPU limit:
-
-```text
+CPU Request = 250m
 CPU Limit = 500m
-Usage = 800m
+
+Application Uses = 800m
 ```
 
-Kubernetes throttles the CPU usage.
+Result:
 
-The container continues running but cannot consume more than the configured limit.
+```text
+CPU Throttling
+```
+
+The Pod continues running.
+
+The container is not killed.
 
 ---
 
-## Memory Limit Behavior
+# Memory Limit Exceeded
 
-If a container exceeds its memory limit:
+Example:
 
 ```text
+Memory Request = 256Mi
 Memory Limit = 512Mi
-Usage = 700Mi
+
+Application Uses = 700Mi
 ```
 
-The container may be terminated by Kubernetes.
-
-Common status:
+Result:
 
 ```text
 OOMKilled
 ```
 
-OOM = Out Of Memory
+The container may be terminated.
 
 ---
 
-## Complete Example
+# Why Scheduler Uses Requests Instead of Limits
 
-```yaml
-apiVersion: v1
-kind: Pod
-
-metadata:
-  name: nginx-pod
-
-spec:
-  containers:
-  - name: nginx
-    image: nginx
-
-    resources:
-      requests:
-        cpu: "250m"
-        memory: "256Mi"
-
-      limits:
-        cpu: "500m"
-        memory: "512Mi"
-```
-
----
-
-## Why Requests and Limits Are Important
-
-### Prevent Resource Starvation
-
-Ensures one application does not consume all node resources.
-
-### Better Scheduling
-
-Scheduler can place Pods on suitable nodes.
-
-### Improved Stability
-
-Protects the node from resource exhaustion.
-
-### Fair Resource Allocation
-
-Multiple applications can coexist without affecting each other.
-
----
-
-## Common Interview Questions
-
-### What is a Resource Request?
-
-A Resource Request is the minimum amount of CPU and memory guaranteed to a container.
-
----
-
-### What is a Resource Limit?
-
-A Resource Limit is the maximum amount of CPU and memory a container can consume.
-
----
-
-### Why are Requests important?
-
-The Kubernetes Scheduler uses Requests to decide Pod placement.
-
----
-
-### What happens when a CPU limit is exceeded?
-
-CPU usage is throttled, but the container usually continues running.
-
----
-
-### What happens when a Memory limit is exceeded?
-
-The container may be terminated and enter an OOMKilled state.
-
----
-
-### Difference between Requests and Limits?
+Example:
 
 ```text
-Request = Guaranteed Resource
+Node Capacity = 4 CPU
 
-Limit = Maximum Allowed Resource
+Pod:
+Request = 2 CPU
+Limit = 8 CPU
 ```
+
+Scheduler uses Requests because they represent guaranteed resources.
+
+If Scheduler used Limits, many Pods would never be scheduled even though the resources may never actually be consumed.
 
 ---
 
-## Key Takeaways
+# Interview Questions
 
-* Requests reserve resources for a Pod.
-* Limits restrict how much a Pod can consume.
-* Scheduler uses Requests during scheduling.
-* CPU overuse leads to throttling.
-* Memory overuse can result in OOMKilled.
-* Requests and Limits improve cluster reliability and stability.
+## What is a Resource Request?
+
+A Resource Request is the minimum guaranteed CPU or memory assigned to a container and used by the Scheduler for Pod placement.
+
+---
+
+## What is a Resource Limit?
+
+A Resource Limit is the maximum CPU or memory a container is allowed to consume.
+
+---
+
+## What happens when CPU Limit is exceeded?
+
+Kubernetes throttles CPU usage.
+
+The Pod continues running.
+
+---
+
+## What happens when Memory Limit is exceeded?
+
+The container may be terminated with OOMKilled.
+
+---
+
+## Why does Kubernetes Scheduler use Requests?
+
+Because Requests represent guaranteed resources required by the Pod.
+
+---
+
+## Difference Between Requests and Limits?
+
+Request = Scheduling
+
+Limit = Enforcement
+
+---
+
+# Quick Revision
+
+```text
+Request
+↓
+Guaranteed Resources
+
+Limit
+↓
+Maximum Allowed Resources
+
+CPU Limit Exceeded
+↓
+Throttled
+
+Memory Limit Exceeded
+↓
+OOMKilled
+
+Scheduler
+↓
+Uses Requests
+
+Kubernetes
+↓
+Enforces Limits
+```
