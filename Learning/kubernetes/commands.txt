@@ -47,3 +47,47 @@ kubectl describe node <node-name>
 kubectl top pod
 kubectl top node
 
+
+# Kubernetes Probes
+
+# Create Pod With Probes
+
+kubectl apply -f probes.yaml
+
+# View Pods
+
+kubectl get pods
+
+# Describe Pod
+
+kubectl describe pod nginx-probes
+
+# Delete Pod
+
+kubectl delete pod nginx-probes
+
+# View Events
+
+kubectl get events
+
+# Validate YAML
+
+kubectl apply --dry-run=client -f probes.yaml
+
+# Check Pod Status
+
+kubectl get pod nginx-probes
+
+# Watch Pod Continuously
+
+kubectl get pod nginx-probes -w
+
+# View Logs
+
+kubectl logs nginx-probes
+
+# View Detailed Pod Information
+
+kubectl describe pod nginx-probes
+
+
