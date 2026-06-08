@@ -87,3 +87,35 @@ kubectl set image deployment/nginx-deployment nginx=nginx:1.25 -n dev
 Self-healing handles failures automatically.
 
 Rolling updates handle application upgrades gradually.
+
+## Kubernetes Horizontal Pod Autoscaler (HPA)
+
+### Topics Covered
+
+* Horizontal Pod Autoscaler (HPA)
+* Metrics Server
+* CPU-based Scaling
+* minReplicas and maxReplicas
+* Scaling Boundaries
+* Deployment vs HPA
+* HPA YAML Configuration
+* HPA Verification Commands
+
+### Commands Practiced
+
+```bash
+kubectl apply -f hpa.yaml
+
+kubectl get hpa
+
+kubectl describe hpa nginx-hpa
+
+kubectl top pods
+
+kubectl top nodes
+```
+
+### Key Learning
+
+HPA automatically scales Pod replicas based on CPU or memory utilization while respecting configured scaling boundaries.
+
