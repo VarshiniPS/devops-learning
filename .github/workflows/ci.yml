@@ -1,4 +1,3 @@
-```yaml
 name: CI Pipeline
 
 on:
@@ -22,4 +21,3 @@ jobs:
 
       - name: List Files
         run: ls -la
-```
