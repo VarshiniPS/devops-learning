@@ -90,4 +90,25 @@ kubectl logs nginx-probes
 
 kubectl describe pod nginx-probes
 
+```bash id="9b2dgb"
+# Helm
+helm version
+helm create my-app
+helm lint my-app
+helm template my-app
+
+# HPA
+kubectl apply -f hpa.yaml
+kubectl get hpa
+kubectl describe hpa nginx-hpa
+kubectl top pods
+kubectl top nodes
+
+# GitHub Actions
+git add .
+git commit -m "added github actions workflow"
+git push
+```
+
+
 
