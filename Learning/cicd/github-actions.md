@@ -1,332 +1,379 @@
 # GitHub Actions
 
-## What is GitHub Actions?
+## What GitHub Actions Is
 
-GitHub Actions is GitHub's CI/CD platform that automates software workflows such as:
+GitHub Actions is an automation engine built directly into GitHub. When something
+happens in your repository — a push, a PR, a release, a scheduled time — it runs
+a YAML-defined workflow on a machine called a runner.
 
-* Build
-* Test
-* Deploy
+> One sentence: GitHub Actions = event happens in repo → YAML workflow runs on a VM.
 
-It allows automation directly from GitHub repositories.
-
----
-
-# Why GitHub Actions?
-
-Benefits:
-
-* Built into GitHub
-* No separate CI server required
-* Easy automation
-* Event-driven workflows
-* Large marketplace of reusable actions
+No separate CI server to maintain. No Jenkins to configure. The workflow file lives
+in `.github/workflows/` alongside your code.
 
 ---
 
-# GitHub Actions Architecture
+## The Five Core Concepts
 
-```text
-Developer
-    ↓
-git push
-    ↓
-GitHub Repository
-    ↓
-Workflow Trigger
-    ↓
-GitHub Actions Runner
-    ↓
-Build / Test / Deploy
-```
+### 1. Trigger (on:)
 
----
-
-# Key Components
-
-## Workflow
-
-A workflow is an automated process.
-
-Stored in:
-
-```text
-.github/workflows/
-```
-
-Example:
-
-```text
-ci.yml
-```
-
----
-
-## Event Trigger
-
-Defines when workflow starts.
-
-Examples:
+What causes the workflow to fire. Defined at the top of every workflow file.
 
 ```yaml
 on:
   push:
-```
-
-```yaml
-on:
+    branches: [main, develop]
   pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * 1'       # every Monday at 6am UTC
+  workflow_dispatch:            # manual trigger from GitHub UI
+  release:
+    types: [published]
 ```
 
-```yaml
-on:
-  workflow_dispatch:
+| Trigger | When it fires |
+|---|---|
+| `push` | Any commit pushed to matching branches |
+| `pull_request` | PR opened, updated, or merged |
+| `schedule` | Cron-based (nightly builds, weekly scans) |
+| `workflow_dispatch` | Manually from GitHub UI or API |
+| `release` | When a GitHub Release is published |
+
+### 2. Workflow
+
+The full automation definition — a single `.yml` file in `.github/workflows/`.
+A repo can have multiple workflow files for different purposes (CI, CD, security scans).
+
+```
+.github/
+  workflows/
+    ci.yml          ← runs on every push
+    deploy.yml      ← runs on release
+    security.yml    ← runs on schedule
 ```
 
----
+A workflow contains: a name, one or more triggers, and one or more jobs.
 
-## Job
+### 3. Jobs
 
-A workflow contains one or more jobs.
-
-Example:
+A job is a set of steps that runs on a single runner. Jobs in the same workflow
+run in parallel by default. Use `needs:` to sequence them.
 
 ```yaml
 jobs:
   build:
+    runs-on: ubuntu-latest
+    steps: [...]
+
+  test:
+    runs-on: ubuntu-latest
+    needs: [build]            # waits for build to complete first
+    steps: [...]
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [build, test]      # waits for both
+    if: github.ref == 'refs/heads/main'
+    steps: [...]
 ```
 
-A job runs on a runner.
+Key properties:
+- `runs-on` — which runner to use
+- `needs` — job dependencies (creates a DAG)
+- `if` — conditional execution
+- `environment` — deployment environment with protection rules
 
----
+### 4. Steps
 
-## Step
+Steps are the individual tasks inside a job. They run sequentially on the same runner,
+sharing the same file system. A step is either:
 
-Each job contains steps.
-
-Example:
+- `uses:` — runs a pre-built Action from the marketplace
+- `run:` — runs shell commands directly
 
 ```yaml
 steps:
+  - name: Checkout code
+    uses: actions/checkout@v4         # pre-built action
+
+  - name: Install dependencies
+    run: npm ci                       # shell command
+
+  - name: Run tests
+    run: |                            # multi-line shell
+      npm test
+      echo "Tests done"
+
+  - name: Deploy
+    env:
+      TOKEN: ${{ secrets.API_TOKEN }} # inject secret as env var
+    run: ./deploy.sh
 ```
 
-Examples:
+### 5. Runners
 
-```yaml
-- run: echo "Hello"
-```
+The machine that executes your job. Two types:
 
-```yaml
-- uses: actions/checkout@v4
-```
+| Type | Description | Cost |
+|---|---|---|
+| GitHub-hosted | Fresh VM per job, managed by GitHub | Free (limited) / metered |
+| Self-hosted | Your own machine registered with GitHub | You pay for the infra |
+
+GitHub-hosted runner labels:
+- `ubuntu-latest` — Linux (most common)
+- `windows-latest` — Windows
+- `macos-latest` — macOS (most expensive)
+
+Each job gets a brand-new VM — nothing persists between jobs unless you use artifacts.
 
 ---
 
-## Runner
-
-A runner executes jobs.
-
-Examples:
-
-```yaml
-runs-on: ubuntu-latest
-```
-
-```yaml
-runs-on: windows-latest
-```
-
-```yaml
-runs-on: self-hosted
-```
-
----
-
-# Workflow Example
+## Full Workflow YAML (annotated)
 
 ```yaml
 name: CI Pipeline
 
 on:
   push:
-    branches:
-      - main
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   build:
+    name: Build
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: dist/
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: [build]                    # runs after build
+
+    steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          path: dist/
+      - run: npm test
 
-      - run: echo "Build Started"
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: [build, test]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to staging
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: ./scripts/deploy.sh
 ```
 
 ---
 
-# Common Triggers
+## Push Trigger Flow
 
-## Push
+```
+git push to main
+      ↓
+GitHub detects on: push event
+reads .github/workflows/*.yml
+      ↓
+Jobs queued
+(parallel unless needs: defined)
+      ↓
+Runner VM provisioned (fresh)
+Repo checked out automatically
+Steps execute sequentially
+      ↓
+Pass → green check on commit
+Fail → red X + email notification
+```
+
+---
+
+## Key Syntax Reference
+
+### Contexts and expressions
 
 ```yaml
-on:
-  push:
+${{ github.ref }}            # branch/tag ref: refs/heads/main
+${{ github.event_name }}     # push, pull_request, etc.
+${{ github.sha }}            # commit SHA
+${{ github.actor }}          # user who triggered the workflow
+${{ secrets.MY_SECRET }}     # secret from repo settings
+${{ env.MY_VAR }}            # environment variable
+${{ steps.my-step.outputs.result }}  # output from a previous step
 ```
 
-Triggered when code is pushed.
-
----
-
-## Pull Request
+### Conditionals
 
 ```yaml
-on:
-  pull_request:
+if: github.ref == 'refs/heads/main'
+if: github.event_name == 'push'
+if: failure()               # only run if a previous step failed
+if: always()                # run regardless of pass/fail
+if: success()               # only run if all previous steps passed
 ```
 
-Triggered when PR is created or updated.
-
----
-
-## Manual Trigger
+### Environment variables
 
 ```yaml
-on:
-  workflow_dispatch:
+env:                          # workflow-level (all jobs)
+  NODE_ENV: production
+
+jobs:
+  build:
+    env:                      # job-level (all steps in this job)
+      APP_VERSION: '1.0'
+    steps:
+      - name: Deploy
+        env:                  # step-level (this step only)
+          TOKEN: ${{ secrets.TOKEN }}
+        run: ./deploy.sh
 ```
 
-Triggered manually.
+### Matrix builds (run same job across multiple configs)
 
----
+```yaml
+strategy:
+  matrix:
+    node-version: [18, 20, 22]
+    os: [ubuntu-latest, windows-latest]
 
-# Common Use Cases
-
-* Build Applications
-* Run Unit Tests
-* Run Security Scans
-* Build Docker Images
-* Push Docker Images
-* Deploy to Kubernetes
-* Deploy to AWS
-* Terraform Automation
-
----
-
-# GitHub Actions vs Jenkins
-
-## GitHub Actions
-
-Advantages:
-
-* Built into GitHub
-* Easy setup
-* Less maintenance
-* Cloud-hosted runners
-
----
-
-## Jenkins
-
-Advantages:
-
-* More customization
-* Large plugin ecosystem
-* Better for complex enterprise pipelines
-
----
-
-# Interview Questions
-
-## What is GitHub Actions?
-
-GitHub Actions is GitHub's built-in CI/CD platform used to automate build, test, and deployment workflows.
-
----
-
-## What is a Workflow?
-
-A workflow is an automated process defined in YAML files inside `.github/workflows`.
-
----
-
-## What is a Job?
-
-A job is a collection of steps executed on a runner.
-
----
-
-## What is a Step?
-
-A step is an individual task within a job.
-
----
-
-## What is a Runner?
-
-A runner is the machine that executes workflow jobs.
-
----
-
-## What Triggers a Workflow?
-
-Common triggers:
-
-* push
-* pull_request
-* workflow_dispatch
-
----
-
-## Difference Between Job and Step?
-
-Job:
-
-```text
-Container of Tasks
+runs-on: ${{ matrix.os }}
+steps:
+  - uses: actions/setup-node@v4
+    with:
+      node-version: ${{ matrix.node-version }}
 ```
 
-Step:
+Runs 3 × 2 = 6 jobs in parallel.
 
-```text
-Individual Task
+### Artifacts (pass data between jobs)
+
+```yaml
+# Upload (in build job)
+- uses: actions/upload-artifact@v4
+  with:
+    name: dist-files
+    path: dist/
+    retention-days: 7
+
+# Download (in test or deploy job)
+- uses: actions/download-artifact@v4
+  with:
+    name: dist-files
+    path: dist/
+```
+
+### Caching (speed up repeated installs)
+
+```yaml
+- uses: actions/setup-node@v4
+  with:
+    node-version: '20'
+    cache: 'npm'              # caches ~/.npm between runs
+```
+
+Or manually:
+
+```yaml
+- uses: actions/cache@v4
+  with:
+    path: ~/.npm
+    key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
 ```
 
 ---
 
-## GitHub Actions vs Jenkins?
+## Essential Marketplace Actions
 
-GitHub Actions is built directly into GitHub and requires less maintenance, while Jenkins offers more customization and plugin support.
+| Action | Purpose |
+|---|---|
+| `actions/checkout@v4` | Check out repo code — always the first step |
+| `actions/setup-node@v4` | Install Node.js |
+| `actions/setup-python@v5` | Install Python |
+| `actions/setup-java@v4` | Install Java |
+| `actions/upload-artifact@v4` | Save files for later jobs or download |
+| `actions/download-artifact@v4` | Retrieve uploaded artifacts |
+| `actions/cache@v4` | Cache dependencies between runs |
+| `docker/login-action@v3` | Log into Docker Hub or ECR |
+| `docker/build-push-action@v5` | Build and push Docker image |
+| `aws-actions/configure-aws-credentials@v4` | Set up AWS CLI credentials |
 
 ---
 
-# Quick Revision
+## Common Gotchas
 
-Workflow:
+| Problem | Symptom | Fix |
+|---|---|---|
+| Workflow not triggering | No run appears | Check branch name matches `branches:` exactly |
+| Jobs run in wrong order | Test runs before build | Add `needs: [build]` to test job |
+| Secret not found | Empty env var | Add secret in repo Settings → Secrets and variables |
+| Artifact not found | download-artifact fails | Upload and download `name:` must match exactly |
+| Cache miss every run | Slow installs | Check `key:` includes the lock file hash |
+| `npm install` vs `npm ci` | Inconsistent installs | Always use `npm ci` in CI — it's faster and stricter |
+| File permissions fail | `./script.sh` permission denied | Add `chmod +x scripts/*.sh` step before running |
+| Workflow YAML syntax error | Workflow doesn't appear | Validate with `actionlint` locally or check the Actions tab error |
 
-```text
-Pipeline
+---
+
+## Workflow File Location
+
+```
+your-repo/
+  .github/
+    workflows/
+      ci.yml          ← created and committed like any other file
+      deploy.yml
+  src/
+  package.json
 ```
 
-Job:
+GitHub detects and runs any `.yml` file in `.github/workflows/` automatically.
+No registration or setup needed beyond creating the file.
 
-```text
-Group of Steps
-```
+---
 
-Step:
+## Key Takeaways
 
-```text
-Single Task
-```
-
-Runner:
-
-```text
-Executes Jobs
-```
-
-Trigger:
-
-```text
-Starts Workflow
-```
+1. Trigger (`on:`) → Workflow (`.yml`) → Jobs (parallel) → Steps (sequential) → Runner (fresh VM).
+2. Jobs run in parallel by default. `needs:` makes them sequential.
+3. Steps share the same runner and file system. Jobs do not — use artifacts to pass files.
+4. GitHub-hosted runners are fresh VMs every time — nothing persists between jobs.
+5. Use `secrets.` for credentials — never hardcode tokens in YAML.
+6. `npm ci` not `npm install` in CI — faster, reproducible, fails if lock file is out of sync.
+7. Always pin action versions (`@v4`) — avoid `@main` or `@latest` in production workflows.

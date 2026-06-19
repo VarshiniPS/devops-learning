@@ -1,0 +1,100 @@
+name: CI Pipeline
+
+# TRIGGER — what fires this workflow
+on:
+  push:
+    branches: [main, develop]       # fires on push to main or develop
+  pull_request:
+    branches: [main]                # fires on PRs targeting main
+  workflow_dispatch:                # allows manual trigger from GitHub UI
+
+# JOBS — units of work that run on a runner
+jobs:
+
+  # JOB 1: Build
+  build:
+    name: Build
+    runs-on: ubuntu-latest          # RUNNER — GitHub-hosted Ubuntu VM
+
+    steps:
+      # STEP 1: Check out the repository code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # STEP 2: Set up Node.js environment
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'              # caches node_modules between runs
+
+      # STEP 3: Install dependencies
+      - name: Install dependencies
+        run: npm ci                 # clean install — faster and stricter than npm install
+
+      # STEP 4: Build the application
+      - name: Build
+        run: npm run build
+
+      # STEP 5: Upload build output as artifact (passed to test job)
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: dist/
+
+  # JOB 2: Test (runs in parallel with build by default)
+  # needs: [build] would make it wait for build to finish first
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: [build]                  # waits for build job to complete
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Download the artifact from the build job
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          path: dist/
+
+      - name: Run tests
+        run: npm test
+
+      # Optional: upload test results
+      - name: Upload test results
+        if: always()                # runs even if tests fail
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results/
+
+  # JOB 3: Deploy (only on push to main, after tests pass)
+  deploy:
+    name: Deploy to staging
+    runs-on: ubuntu-latest
+    needs: [build, test]            # requires both jobs to pass
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}   # secrets from repo settings
+        run: |
+          echo "Deploying to staging..."
+          ./scripts/deploy.sh
