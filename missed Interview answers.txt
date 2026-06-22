@@ -1,0 +1,36 @@
+The mapping you need to memorise:
+ECS                 Kubernetes equivalent  Key difference
+Task Definition     Pod spec               Defines container, CPU, memory, env vars
+Task                Running Pod            One instance of a Task Definition
+Service             Deployment + Service   ECS bundles scheduling AND load balancer registration into one object
+Cluster             Node group             The compute boundary
+
+The one insight that makes it stick:ECS bundles what Kubernetes separates. In K8s you need a Deployment (to manage replicas) AND a Service (to expose them). In ECS, one Service object does both — it maintains the desired task count AND registers tasks with the load balancer automatically. That bundling is why ECS feels simpler.
+One tip:This question is a classic "show me you know both sides" test. Even if you've only used EKS, interviewers on AWS teams will ask about ECS. Spend 15 minutes today writing out this table from memory until it's instant recall. Four rows, one key difference per row — that's the whole answer.
+
+Helm vs Kubectl
+
+Raw kubectl has no templating or versioning — every environment means near-identical YAML files with hardcoded values in each. 
+For example, deploying to staging vs prod means separate files with different image tags, replica counts, and ingress hostnames — any change has to be made in multiple places. 
+Helm solves this with one Chart and a values file per environment. 
+You run helm upgrade --install my-app ./my-app -f prod-values.yaml and Helm renders the right YAML for that environment. 
+It also stores every deploy as a versioned release, so helm rollback my-app 1 gets you back instantly — kubectl has none of that.
+
+what Helm actually does step by step when a command runs. That's the gap.
+The sequence you need to memorise — five beats:
+1. Reads Chart.yaml          → gets chart name, version
+2. Merges values             → prod-values.yaml overrides values.yaml defaults
+3. Renders templates         → Go templating → plain Kubernetes YAML
+4. Applies to cluster        → Kubernetes API (same as kubectl apply internally)
+5. Stores the release        → saves as a Secret in the namespace → enables rollback
+The two things that make this answer impressive:
+
+"Merges values — the -f file overrides defaults in values.yaml" — shows you understand the precedence model.
+"Stores the release as a Kubernetes Secret" — almost nobody knows this. It's why helm rollback works and why deleting a Secret breaks your release history.
+
+The --install flag specifically:
+
+It makes the command idempotent — install if the release doesn't exist, upgrade if it does. That's why you use it in CI pipelines instead of separate helm install / helm upgrade commands.
+One tip:
+
+A Workflow is the YAML file in .github/workflows/ triggered by an event. It contains Jobs, which run in parallel by default on separate runner VMs. Each Job contains Steps, which run sequentially on the same VM. Steps share a filesystem because they're on the same machine — a file created in step 1 is visible in step 2. Jobs don't share a filesystem because each gets a brand new VM with nothing on it. To pass files between jobs you upload an artifact in one job and download it in the next."
