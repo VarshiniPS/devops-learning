@@ -1,0 +1,26 @@
+{
+  "name": "devops-node-app",
+  "version": "1.0.0",
+  "description": "Simple Node.js app for DevOps end-to-end project",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "node --watch app.js",
+    "test": "jest --coverage",
+    "test:watch": "jest --watch"
+  },
+  "keywords": ["devops", "nodejs", "kubernetes", "docker"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^6.3.4"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "collectCoverageFrom": ["app.js"]
+  }
+}
