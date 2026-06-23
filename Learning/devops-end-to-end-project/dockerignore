@@ -1,0 +1,11 @@
+app/node_modules
+app/coverage
+app/.gitignore
+app/app.test.js
+**/.env
+**/*.log
+.git
+.gitignore
+README.md
+docs/
+kubernetes/
