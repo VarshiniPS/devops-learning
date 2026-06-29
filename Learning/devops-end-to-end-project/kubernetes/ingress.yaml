@@ -1,0 +1,47 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nodejs-ingress
+  namespace: default
+  labels:
+    app: nodejs-app
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"   # set true when TLS cert is ready
+
+spec:
+  ingressClassName: nginx
+
+  rules:
+
+    # ── Path-based routing ───────────────────────────────────────────────────
+    - host: nodejs-app.example.com       # replace with your actual domain or IP
+      http:
+        paths:
+
+          # Root → app
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nodejs-service     # your Service
+                port:
+                  number: 80
+
+          # /health → app (for external monitoring)
+          - path: /health
+            pathType: Exact
+            backend:
+              service:
+                name: nodejs-service
+                port:
+                  number: 80
+
+          # /api → app (extend to a separate service later)
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: nodejs-service
+                port:
+                  number: 80
