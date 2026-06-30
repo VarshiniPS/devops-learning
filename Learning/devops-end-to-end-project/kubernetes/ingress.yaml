@@ -6,7 +6,6 @@ metadata:
   labels:
     app: nodejs-app
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
     nginx.ingress.kubernetes.io/ssl-redirect: "false"   # set true when TLS cert is ready
 
 spec:
