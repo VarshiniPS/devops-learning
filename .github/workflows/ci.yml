@@ -72,7 +72,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ${{ env.PROJECT_DIR }}
-          file: ${{ env.PROJECT_DIR }}/Dockerfile
+          file: ${{ env.PROJECT_DIR }}/docker/Dockerfile
           push: false
           tags: |
             node-app:${{ github.sha }}
