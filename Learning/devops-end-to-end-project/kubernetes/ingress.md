@@ -63,17 +63,17 @@ Standard metadata. Namespace must match the Services it routes to.
 
 ```yaml
   annotations:
-    kubernetes.io/ingress.class: "nginx"
-    nginx.ingress.kubernetes.io/rewrite-target: /
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/limit-rps: "100"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
 ```
 
 Annotations configure the Controller's behaviour per-Ingress:
-- `ingress.class` — tells which Controller to handle this resource
-- `rewrite-target` — strips path prefix before forwarding to the Service
-- `ssl-redirect` — forces HTTP → HTTPS
-- `limit-rps` — rate limits to 100 req/s per client IP
+- `ssl-redirect` — forces HTTP → HTTPS once a real TLS cert is configured (set to `"true"` then)
+
+> **Do not add `rewrite-target: /`** unless your app is a true single-page app
+> where every path should serve the same `index.html`. For a multi-route API
+> like ours (`/`, `/health`, `/ready`, `/info`), this annotation rewrites every
+> matched path to `/` before forwarding — silently breaking all other routes.
+> See the gotchas section below for the full incident writeup.
 
 ```yaml
 spec:
@@ -341,10 +341,58 @@ curl -H "Host: devops-node-app.example.com" http://<ADDRESS>/health
 | No Controller installed | `ADDRESS` blank forever | Install nginx controller or enable minikube addon |
 | Wrong `ingressClassName` | Rules silently ignored | Match class to installed controller (`nginx`, `alb`) |
 | TLS Secret missing | HTTPS fails, 404 on port 443 | Create Secret before applying Ingress |
-| `rewrite-target` missing | 404 on sub-paths | Add `nginx.ingress.kubernetes.io/rewrite-target: /` |
+| **`rewrite-target` set when app has multiple routes** | **Every path returns the `/` response — `/health`, `/api` etc. all return the same body** | **Remove `rewrite-target` annotation entirely unless your app is a true single-route SPA** |
 | `Backends: <none>` | 503 Service Unavailable | Service selector doesn't match Pod labels |
 | DNS not pointing to ADDRESS | `curl` works by IP, not hostname | Add to `/etc/hosts` for local testing |
 | pathType `Prefix` too broad | Wrong service gets traffic | Use `Exact` for specific routes like `/health` |
+| Docker Desktop `ADDRESS` shows internal bridge IP | `172.18.x.x` instead of `localhost` | Use `http://localhost` directly — Docker Desktop auto-maps the controller's LoadBalancer port 80 to localhost, the bridge IP itself isn't reachable from Windows |
+
+### Real incident: rewrite-target silently breaking every route
+
+This exact bug was hit and fixed during this project. Symptoms:
+
+```bash
+curl -H "Host: nodejs-app.example.com" http://localhost/health
+# returned the home page response instead of {"status":"ok",...}
+```
+
+`kubectl describe ingress` showed the Backends were correctly wired — healthy
+Pod IPs listed for `/health`. The rules were correct. The annotation was the
+problem:
+
+```yaml
+annotations:
+  nginx.ingress.kubernetes.io/rewrite-target: /
+```
+
+This rewrites **every matched path to `/`** before forwarding to the Service —
+regardless of which rule matched. It's designed for single-page apps where
+every route should hit the same `index.html`. For a multi-route API like ours,
+it silently collapses every endpoint into one.
+
+**Fix:** remove the annotation entirely when your app has more than one route
+that needs to stay distinct.
+
+```yaml
+# Before (broken for multi-route apps)
+annotations:
+  nginx.ingress.kubernetes.io/rewrite-target: /
+
+# After (correct)
+annotations:
+  nginx.ingress.kubernetes.io/ssl-redirect: "false"
+  # no rewrite-target — app.js handles its own routes
+```
+
+### Debugging checklist when responses look wrong but Backends are healthy
+
+1. `kubectl describe ingress <name>` — confirm Backends show Pod IPs, not `<none>`
+2. Check `Annotations:` section for `rewrite-target` — remove if app has multiple routes
+3. Verify the running image matches your latest code:
+   ```bash
+   kubectl get deployment <name> -o jsonpath="{.spec.template.spec.containers[0].image}"
+   ```
+4. If the image is stale, rebuild, push, and `kubectl set image` to roll it out
 
 ---
 

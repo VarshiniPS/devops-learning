@@ -147,7 +147,10 @@ docker images devops-node-app
 ## Run the Container
 
 ```bash
-docker run -d --name my-app -p 3000:3000 devops-node-app:latest
+docker run -d \
+  --name my-app \
+  -p 3000:3000 \
+  devops-node-app:latest
 ```
 
 | Flag | Meaning |
@@ -159,7 +162,12 @@ docker run -d --name my-app -p 3000:3000 devops-node-app:latest
 ### Run with environment variable overrides
 
 ```bash
-docker run -d --name my-app -p 3000:3000 -e NODE_ENV=staging -e APP_VERSION=1.0.0 devops-node-app:latest
+docker run -d \
+  --name my-app \
+  -p 3000:3000 \
+  -e NODE_ENV=staging \
+  -e APP_VERSION=1.0.0 \
+  devops-node-app:latest
 ```
 
 ---
@@ -304,6 +312,59 @@ docker push devops-node-app:latest
 | `COPY` fails | `no such file` during build | Check paths — Dockerfile `COPY app/app.js` expects to run from project root |
 | Healthcheck unhealthy | `unhealthy` status | Check `/health` returns 200 — `docker exec -it my-app wget -qO- localhost:3000/health` |
 | Changes not reflected | Old code running | You must `docker build` again — running containers don't pick up file changes |
+| `open Dockerfile: no such file` | Build fails even though a Dockerfile exists | You're not in the project root, or the Dockerfile lives in `docker/` not root — see below |
+| Wrong directory when building | `COPY app/app.js` fails, or wrong Dockerfile picked up silently | Always run `docker build` from the **project root**, never from inside `app/` or `docker/` |
+
+### Two Dockerfile locations — which to use
+
+This project keeps a Dockerfile in two places for flexibility:
+
+```
+devops-end-to-end-project/
+├── Dockerfile              ← build with: docker build -t node-app .
+└── docker/
+    └── Dockerfile          ← build with: docker build -f docker/Dockerfile -t node-app .
+```
+
+**Always run the build command from the project root**, regardless of which
+Dockerfile you target. If you `cd` into `app/` or `docker/` first, `COPY app/app.js`
+will fail with `no such file or directory` because the build context no longer
+contains an `app/` folder relative to where you are.
+
+```powershell
+# Correct — from project root
+cd devops-end-to-end-project
+docker build -f docker/Dockerfile -t node-app .
+
+# Wrong — from inside docker/ or app/
+cd devops-end-to-end-project/docker
+docker build -t node-app .          # fails: no such file or directory
+```
+
+### Stale image running old code
+
+If you've edited `app.js` but the running container still shows old behaviour
+(e.g. plain text instead of JSON, missing routes), the image was never rebuilt.
+Editing source files locally never updates a container already running from
+an older image.
+
+```powershell
+# Rebuild with a new tag
+docker build -f docker/Dockerfile -t myuser/node-app:v2 .
+
+# Push so Kubernetes can pull it
+docker push myuser/node-app:v2
+
+# Roll the Deployment to the new image
+kubectl set image deployment/nodejs-deployment <container-name>=myuser/node-app:v2
+kubectl rollout status deployment/nodejs-deployment
+```
+
+Verify which image a running Deployment actually uses before debugging app code:
+
+```bash
+kubectl get deployment nodejs-deployment -o jsonpath="{.spec.template.spec.containers[0].image}"
+```
 
 ---
 
