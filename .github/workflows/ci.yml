@@ -73,6 +73,7 @@ jobs:
         with:
           context: ${{ env.PROJECT_DIR }}
           file: ${{ env.PROJECT_DIR }}/docker/Dockerfile
+          load: true
           push: false
           tags: |
             node-app:${{ github.sha }}
