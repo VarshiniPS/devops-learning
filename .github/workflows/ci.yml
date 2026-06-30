@@ -8,6 +8,11 @@ on:
     branches: [main, master]
   workflow_dispatch:          # allows manual run from the GitHub Actions tab
 
+# Project lives nested inside the repo, not at the root.
+# Every path below is relative to the repo root: devops-learning/
+env:
+  PROJECT_DIR: Learning/devops-end-to-end-project
+
 jobs:
 
   # ── JOB 1: Test ──────────────────────────────────────────────────────────────
@@ -30,12 +35,12 @@ jobs:
 
       # Install — npm ci is reproducible, fails if lock file is out of sync
       - name: Install dependencies
-        working-directory: ./app
+        working-directory: ${{ env.PROJECT_DIR }}/app
         run: npm ci
 
       # Run the Jest suite (5 tests covering /, /health, /ready, /info, 404)
       - name: Run tests
-        working-directory: ./app
+        working-directory: ${{ env.PROJECT_DIR }}/app
         run: npm test
 
       # Upload coverage report as a build artifact
@@ -44,7 +49,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: app/coverage/
+          path: ${{ env.PROJECT_DIR }}/app/coverage/
           retention-days: 7
 
   # ── JOB 2: Build Docker image ───────────────────────────────────────────────
@@ -61,13 +66,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # Build the image using the root Dockerfile, tag with commit SHA + latest
-      # No push yet — this job only proves the image builds successfully
+      # Build the image using the project's Dockerfile, tag with commit SHA + latest
+      # context is the PROJECT_DIR, not the repo root, since app/ lives there
       - name: Build image
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: ./Dockerfile
+          context: ${{ env.PROJECT_DIR }}
+          file: ${{ env.PROJECT_DIR }}/Dockerfile
           push: false
           tags: |
             node-app:${{ github.sha }}
