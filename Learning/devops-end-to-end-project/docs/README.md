@@ -1,332 +1,253 @@
-# devops-end-to-end-project
+# node-app
 
-A full DevOps pipeline built from scratch — Node.js app containerised with Docker,
-deployed to Kubernetes, automated with GitHub Actions, and running on AWS EKS.
-
-Every file in this repo was written, tested, and documented as part of a structured
-learning programme covering Docker, Kubernetes, Helm, GitHub Actions, and AWS EKS.
+A containerised Node.js application deployed on Amazon EKS via a fully automated CI/CD pipeline.
 
 ---
 
-## Overview
+## Table of Contents
 
-| Layer | Technology | Purpose |
+- [Project Overview](#project-overview)
+- [CI/CD Pipeline Flow](#cicd-pipeline-flow)
+- [Amazon ECR](#amazon-ecr)
+- [Deployment Architecture](#deployment-architecture)
+- [Kubernetes Resources](#kubernetes-resources)
+- [Local Development](#local-development)
+- [Commands Reference](#commands-reference)
+
+---
+
+## Project Overview
+
+| Item | Detail |
+|---|---|
+| **App** | Node.js |
+| **Docker Image** | `varshinips/node-app` |
+| **ECR Repository** | `715708572462.dkr.ecr.us-east-1.amazonaws.com/my-app` |
+| **Cluster** | Amazon EKS |
+| **Region** | `us-east-1` |
+| **CI/CD** | GitHub Actions |
+
+---
+
+## CI/CD Pipeline Flow
+
+Every `git push` to `main` triggers the full pipeline automatically:
+
+```
+Developer (local)
+      │
+      │  git push origin main
+      ▼
+   GitHub
+      │
+      │  triggers .github/workflows/deploy.yml
+      ▼
+GitHub Actions
+      │
+      ├── 1. Checkout code
+      ├── 2. Run tests
+      ├── 3. docker build -t node-app .
+      ├── 4. Authenticate with ECR
+      │       aws ecr get-login-password | docker login ...
+      ├── 5. docker tag node-app → ECR URI
+      ├── 6. docker push → ECR
+      └── 7. kubectl apply -f k8s/
+      │
+      ▼
+Amazon ECR
+      │
+      │  EKS pulls image on deployment
+      ▼
+Amazon EKS
+      │
+      ├── Deployment (Pods running node-app)
+      ├── Service (ClusterIP / LoadBalancer)
+      └── Ingress (HTTP routing → ALB)
+      │
+      ▼
+    Users
+```
+
+---
+
+## Amazon ECR
+
+### What is ECR?
+
+Amazon ECR (Elastic Container Registry) is AWS's managed Docker image registry. It stores and versions the Docker images built by GitHub Actions and supplies them to EKS at deploy time.
+
+### Repository Details
+
+| Field | Value |
+|---|---|
+| **Type** | Private |
+| **Repository Name** | `my-app` |
+| **Registry URI** | `715708572462.dkr.ecr.us-east-1.amazonaws.com` |
+| **Full Image URI** | `715708572462.dkr.ecr.us-east-1.amazonaws.com/my-app:latest` |
+| **Region** | `us-east-1` |
+| **Scan on Push** | Enabled |
+
+### Private vs Public
+
+| | Private (this project) | Public |
 |---|---|---|
-| App | Node.js + Express | REST API with health/ready/info endpoints |
-| Container | Docker (multi-stage) | Portable, reproducible image |
-| Orchestration | Kubernetes | Self-healing, scalable deployment |
-| Routing | Ingress (nginx) | Single entry point, path/host routing |
-| CI/CD | GitHub Actions | Auto-test, build, push, deploy on push |
-| Cloud | AWS EKS | Managed Kubernetes — AWS runs the control plane |
-| Packaging | Helm | Versioned, templated K8s releases |
+| Access | IAM-controlled | Anyone |
+| Auth required to pull | Yes | No |
+| Use case | Production workloads | Open source images |
+| URL format | `<account>.dkr.ecr.<region>.amazonaws.com` | `public.ecr.aws/<alias>` |
 
----
-
-## Architecture
-
-```
-  Developer
-     │
-     │  git push
-     ▼
-  GitHub ──── triggers ────▶ GitHub Actions
-                                   │
-                          ┌────────┴────────┐
-                          │                 │
-                        test             build
-                          │                 │
-                          └────────┬────────┘
-                                   │
-                              push image
-                                   │
-                                   ▼
-                           Docker Registry
-                         (Docker Hub / ECR)
-                                   │
-                            helm upgrade
-                                   │
-                                   ▼
-              ┌────────────────────────────────────────┐
-              │             AWS EKS Cluster             │
-              │                                        │
-              │  Internet                              │
-              │     │ HTTPS                            │
-              │     ▼                                  │
-              │   ALB (AWS Load Balancer)              │
-              │     │                                  │
-              │     ▼                                  │
-              │  Ingress Controller (nginx)            │
-              │     │                                  │
-              │     ├── /        ──▶ nodejs-service    │
-              │     ├── /health  ──▶ nodejs-service    │
-              │     └── /api     ──▶ nodejs-service    │
-              │                        │               │
-              │                        ▼               │
-              │               ClusterIP Service        │
-              │            (selector: app=nodejs-app)  │
-              │                        │               │
-              │          ┌─────────────┼─────────────┐ │
-              │          ▼             ▼             ▼ │
-              │        Pod 1         Pod 2         Pod 3│
-              │       :3000          :3000         :3000│
-              │                                        │
-              │  Control plane: AWS managed            │
-              │  Workers: EC2 managed node groups      │
-              └────────────────────────────────────────┘
-```
-
----
-
-## Folder Structure
-
-```
-devops-end-to-end-project/
-│
-├── app/                         # Node.js application
-│   ├── app.js                   # Express server — /, /health, /ready, /info
-│   ├── app.test.js              # Jest + Supertest — 5 tests, all passing
-│   ├── package.json             # Dependencies: express. Dev: jest, supertest
-│   └── .gitignore               # Excludes node_modules, coverage, .env
-│
-├── docker/
-│   └── Dockerfile               # Multi-stage build (deps → runner), non-root user
-│
-├── kubernetes/
-│   ├── deployment.yaml          # 3 replicas, rolling update, liveness/readiness probes
-│   ├── service.yaml             # ClusterIP + NodePort + LoadBalancer (all three types)
-│   ├── ingress.yaml             # Path-based routing → nodejs-service, TLS-ready
-│   └── ingress.md               # Ingress architectural notes
-│
-├── docs/
-│   ├── setup.md                 # Local Node.js setup and endpoint reference
-│   └── docker.md                # Docker build, run, verify, and debug guide
-│
-├── .github/
-│   └── workflows/
-│       ├── ci.yml               # Test + build on every push
-│       └── deploy.yml           # Push image + deploy to EKS on merge to main
-│
-├── Dockerfile                   # Root-level (for docker build -t node-app .)
-├── .dockerignore                # Excludes node_modules, coverage, .env, .git
-└── README.md
-```
-
----
-
-## Deployment Steps
-
-### Phase 1 — Run locally
+### Pushing an Image to ECR
 
 ```bash
-git clone https://github.com/<your-username>/devops-end-to-end-project.git
-cd devops-end-to-end-project/app
+# 1. Authenticate Docker
+aws ecr get-login-password --region us-east-1 | docker login \
+  --username AWS --password-stdin \
+  715708572462.dkr.ecr.us-east-1.amazonaws.com
+
+# 2. Build image
+docker build -t varshinips/node-app .
+
+# 3. Tag for ECR
+docker tag varshinips/node-app:latest \
+  715708572462.dkr.ecr.us-east-1.amazonaws.com/my-app:latest
+
+# 4. Push
+docker push 715708572462.dkr.ecr.us-east-1.amazonaws.com/my-app:latest
+```
+
+---
+
+## Deployment Architecture
+
+### Active Deployment Layout
+
+```
+                        ┌─────────────────────────────────────┐
+                        │          Amazon EKS Cluster          │
+                        │                                      │
+   Internet             │   ┌──────────────────────────────┐  │
+      │                 │   │        Ingress (ALB)         │  │
+      │  HTTPS          │   │  host: app.varshinips.dev    │  │
+      └────────────────►│   └──────────────┬───────────────┘  │
+                        │                  │                   │
+                        │   ┌──────────────▼───────────────┐  │
+                        │   │     Service (LoadBalancer)    │  │
+                        │   │        port: 80               │  │
+                        │   └──────────────┬───────────────┘  │
+                        │                  │                   │
+                        │   ┌──────────────▼───────────────┐  │
+                        │   │         Deployment            │  │
+                        │   │   replicas: 2                 │  │
+                        │   │   image: ECR/my-app:latest    │  │
+                        │   │                               │  │
+                        │   │  ┌─────────┐  ┌─────────┐   │  │
+                        │   │  │  Pod 1  │  │  Pod 2  │   │  │
+                        │   │  │ :8080   │  │ :8080   │   │  │
+                        │   │  └─────────┘  └─────────┘   │  │
+                        │   └──────────────────────────────┘  │
+                        │                                      │
+                        │   Worker Nodes (EC2)                 │
+                        └─────────────────────────────────────┘
+                                          │
+                                          │ pulls image
+                                          ▼
+                              ┌───────────────────────┐
+                              │      Amazon ECR        │
+                              │  715708572462.dkr.ecr  │
+                              │  .us-east-1.amazonaws  │
+                              │  .com/my-app:latest    │
+                              └───────────────────────┘
+```
+
+### Traffic Flow (Request Lifecycle)
+
+```
+User Request
+    │
+    ▼
+AWS ALB (provisioned by Ingress Controller)
+    │  matches host/path rules
+    ▼
+Kubernetes Service
+    │  load balances across Pod replicas
+    ▼
+Pod (node-app container on port 8080)
+    │
+    ▼
+Response → User
+```
+
+---
+
+## Kubernetes Resources
+
+| Resource | File | Purpose |
+|---|---|---|
+| `Deployment` | `k8s/deployment.yaml` | Manages Pod replicas, rolling updates |
+| `Service` | `k8s/service.yaml` | Stable endpoint, load balancing |
+| `Ingress` | `k8s/ingress.yaml` | HTTP routing, TLS termination |
+
+### Key Deployment Config
+
+```yaml
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+        - name: node-app
+          image: 715708572462.dkr.ecr.us-east-1.amazonaws.com/my-app:latest
+          ports:
+            - containerPort: 8080
+```
+
+---
+
+## Local Development
+
+```bash
+# Run locally with Docker
+docker run -p 3000:8080 varshinips/node-app
+
+# Or directly with Node
 npm install
-npm test                         # 5 tests should pass
-npm start                        # server on http://localhost:3000
+npm start
 ```
 
-### Phase 2 — Containerise
+---
+
+## Commands Reference
 
 ```bash
-# Build image (from project root)
-docker build -t node-app .
+# ── ECR ──────────────────────────────────────────────────────────
+# Authenticate Docker
+aws ecr get-login-password --region us-east-1 | docker login \
+  --username AWS --password-stdin \
+  715708572462.dkr.ecr.us-east-1.amazonaws.com
 
-# Verify
-docker images node-app           # should show ~130MB
+# List images in ECR
+aws ecr list-images --repository-name my-app --region us-east-1
 
-# Run
-docker run -d --name my-app -p 3000:3000 node-app
+# ── Docker ────────────────────────────────────────────────────────
+docker build -t varshinips/node-app .
+docker tag varshinips/node-app:latest \
+  715708572462.dkr.ecr.us-east-1.amazonaws.com/my-app:latest
+docker push 715708572462.dkr.ecr.us-east-1.amazonaws.com/my-app:latest
 
-# Smoke test
-curl http://localhost:3000/health
-docker inspect --format='{{.State.Health.Status}}' my-app   # → healthy
-
-# Cleanup
-docker rm -f my-app
-```
-
-### Phase 3 — Deploy to Kubernetes
-
-```bash
-# Apply manifests in order
-kubectl apply -f kubernetes/deployment.yaml
-kubectl apply -f kubernetes/service.yaml
-kubectl apply -f kubernetes/ingress.yaml
-
-# Verify deployment
-kubectl get deployments
+# ── Kubernetes ────────────────────────────────────────────────────
+kubectl apply -f k8s/
 kubectl get pods
 kubectl get svc
 kubectl get ingress
-
-# Watch pods come up
-kubectl get pods -w
-
-# Audit a specific resource
-kubectl describe deployment devops-node-app
-kubectl describe svc nodejs-service
-kubectl describe ingress nodejs-ingress
-
-# Test via Ingress (replace ADDRESS with kubectl get ingress output)
-curl -H "Host: nodejs-app.example.com" http://<ADDRESS>/health
-```
-
-### Phase 4 — CI/CD via GitHub Actions
-
-```bash
-# Push to develop → runs CI (test + build)
-git checkout -b develop
-git push origin develop
-
-# Merge to main → runs deploy (push image + helm upgrade on EKS)
-git checkout main
-git merge develop
-git push origin main
-```
-
-### Phase 5 — EKS (AWS)
-
-```bash
-# Connect kubectl to EKS cluster
-aws eks update-kubeconfig --name my-cluster --region ap-south-1
-
-# Verify nodes
-kubectl get nodes
-
-# Deploy via Helm
-helm upgrade --install nodejs-app ./kubernetes/helm \
-  -f kubernetes/helm/values-prod.yaml \
-  --namespace production \
-  --create-namespace
-
-# Verify
-kubectl get pods -n production
-kubectl get ingress -n production
+kubectl describe deployment node-app
+kubectl rollout status deployment/node-app
+kubectl rollout undo deployment/node-app   # rollback if needed
 ```
 
 ---
 
-## Docker Commands
+## Docs
 
-```bash
-# Build
-docker build -t node-app .
-docker build -t node-app:1.0.0 -t node-app:latest .
-
-# Inspect
-docker images node-app
-docker history node-app          # see layer sizes
-
-# Run
-docker run -d --name my-app -p 3000:3000 node-app
-docker run -d --name my-app -p 3000:3000 -e NODE_ENV=production node-app
-
-# Debug
-docker ps                        # running containers
-docker ps -a                     # all containers including stopped
-docker logs my-app
-docker logs -f my-app            # follow live
-docker exec -it my-app sh        # shell into container
-docker inspect my-app            # full container metadata
-docker inspect --format='{{.State.Health.Status}}' my-app
-
-# Cleanup
-docker rm -f my-app              # stop + remove container
-docker rmi node-app              # remove image
-docker system prune              # remove all unused resources
-```
-
----
-
-## Kubernetes Commands
-
-```bash
-# Apply
-kubectl apply -f kubernetes/deployment.yaml
-kubectl apply -f kubernetes/service.yaml
-kubectl apply -f kubernetes/ingress.yaml
-kubectl apply -f kubernetes/            # apply entire folder
-
-# Get (quick status)
-kubectl get deployments
-kubectl get pods
-kubectl get pods -o wide             # includes node and IP
-kubectl get pods -w                  # watch live
-kubectl get svc
-kubectl get ingress
-kubectl get endpoints                # shows Pod IPs behind each Service
-kubectl get all                      # everything in default namespace
-
-# Describe (deep audit)
-kubectl describe deployment devops-node-app
-kubectl describe pod <pod-name>
-kubectl describe svc nodejs-service
-kubectl describe ingress nodejs-ingress
-
-# Logs
-kubectl logs <pod-name>
-kubectl logs -f <pod-name>           # follow live
-kubectl logs deploy/devops-node-app  # logs from deployment (any pod)
-
-# Debug
-kubectl exec -it <pod-name> -- sh    # shell into pod
-kubectl port-forward svc/nodejs-service 8080:80  # local access without Ingress
-
-# Rollout
-kubectl rollout status deploy/devops-node-app
-kubectl rollout history deploy/devops-node-app
-kubectl rollout undo deploy/devops-node-app      # rollback
-
-# Scale
-kubectl scale deploy/devops-node-app --replicas=5
-
-# Delete
-kubectl delete -f kubernetes/deployment.yaml
-kubectl delete deploy devops-node-app
-```
-
----
-
-## Environments
-
-| Environment | Branch | Namespace | Trigger |
-|---|---|---|---|
-| Local | — | default | manual |
-| Staging | `develop` | `staging` | push to develop |
-| Production | `main` | `production` | merge to main |
-
----
-
-## App Endpoints
-
-| Endpoint | Method | Purpose |
-|---|---|---|
-| `/` | GET | Home — returns version and environment |
-| `/health` | GET | Liveness probe — K8s restarts Pod if this fails |
-| `/ready` | GET | Readiness probe — K8s stops traffic if this fails |
-| `/info` | GET | App metadata — node version, PID, memory |
-
----
-
-## Key Design Decisions
-
-**Multi-stage Dockerfile** — stage 1 installs dependencies, stage 2 copies only
-`node_modules` and `app.js`. No npm in the final image. Result: ~130MB vs ~900MB.
-
-**Non-root container user** — containers run as `appuser`, not root. A container
-escape gives an attacker an unprivileged shell, not root on the host.
-
-**Three probe types** — `livenessProbe` restarts stuck Pods. `readinessProbe`
-removes unready Pods from Service endpoints. `startupProbe` gives slow-starting
-apps up to 5 minutes before liveness kicks in.
-
-**ClusterIP as Ingress backend** — Ingress routes to the ClusterIP Service, not
-directly to Pods. The Service handles load balancing across Pod replicas.
-
-**Rolling update strategy** — `maxUnavailable: 1` and `maxSurge: 1` means at
-most one Pod is down and one extra Pod is up during a deployment. Zero-downtime
-updates by default.
-
-**GitHub Actions `--install` flag** — `helm upgrade --install` is idempotent.
-It installs if the release doesn't exist, upgrades if it does. Safe to run on
-every push without checking state first.
+- [`docs/ecr-notes.md`](docs/ecr-notes.md) — ECR concepts, private vs public, push walkthrough
+- [`docs/service.md`](docs/service.md) — Kubernetes Service types (ClusterIP, NodePort, LoadBalancer)
+- [`kubernetes/service.yaml`](kubernetes/service.yaml) — Service manifest
