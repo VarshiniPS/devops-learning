@@ -1,0 +1,18 @@
+# Terraform local state and cache — never commit these
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+crash.log
+crash.*.log
+
+# Variable files — uncomment if yours ever contain secrets (keys, passwords)
+# *.tfvars
+# *.tfvars.json
+
+# CLI config that may contain credentials
+.terraformrc
+terraform.rc
+
+# Lock file — commit this one (opinions vary, but committing it is the safer default)
+!.terraform.lock.hcl
