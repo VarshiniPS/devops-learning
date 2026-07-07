@@ -1,3 +1,10 @@
+# -----------------------------------------------------------------------------
+# PROVIDER CONFIGURATION
+#
+# Pins the Terraform CLI and AWS provider versions, and configures which
+# region the AWS provider talks to (set via var.aws_region in terraform.tfvars).
+# -----------------------------------------------------------------------------
+
 terraform {
   required_version = ">= 1.5.0"
 

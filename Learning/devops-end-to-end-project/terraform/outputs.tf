@@ -1,3 +1,11 @@
+# -----------------------------------------------------------------------------
+# OUTPUTS
+#
+# Surfaces key resource attributes after `apply` so they can be looked up
+# without checking the AWS console, and so other modules or CI/CD steps
+# can consume them (e.g. `terraform output -json`).
+# -----------------------------------------------------------------------------
+
 output "vpc_id" {
   description = "ID of the created VPC"
   value       = aws_vpc.main.id

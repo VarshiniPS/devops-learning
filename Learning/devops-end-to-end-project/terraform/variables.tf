@@ -1,3 +1,10 @@
+# -----------------------------------------------------------------------------
+# INPUT VARIABLES
+#
+# Declares every configurable input for this project. Actual values are
+# assigned in terraform.tfvars, which Terraform loads automatically.
+# -----------------------------------------------------------------------------
+
 variable "aws_region" {
   description = "AWS region to deploy resources into"
   type        = string
