@@ -20,8 +20,8 @@ spec:
         app: nodejs-app
     spec:
       containers:
-        - name: node-app
-          image: 715708572462.dkr.ecr.us-east-1.amazonaws.com/my-app:latest
+        - name: nodejs-container
+          image: varshinips/node-app:v2
           ports:
             - containerPort: 3000
 
