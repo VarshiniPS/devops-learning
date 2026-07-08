@@ -1,37 +1,55 @@
 apiVersion: apps/v1
 kind: Deployment
-
 metadata:
   name: nodejs-deployment
   labels:
     app: nodejs-app
-
 spec:
   replicas: 3
-
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
   selector:
     matchLabels:
       app: nodejs-app
-
   template:
     metadata:
       labels:
         app: nodejs-app
-
     spec:
       containers:
-      - name: nodejs-container
+        - name: node-app
+          image: 715708572462.dkr.ecr.us-east-1.amazonaws.com/my-app:latest
+          ports:
+            - containerPort: 3000
 
-        image: varshinips/node-app:v1
+          # ── All ConfigMap keys injected as env vars ──
+          envFrom:
+            - configMapRef:
+                name: node-app-config
+            - secretRef:
+                name: node-app-secret
 
-        ports:
-        - containerPort: 3000
+          # ── Example of referencing a single key individually ──
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: node-app-secret
+                  key: DB_PASSWORD
 
-        resources:
-          requests:
-            cpu: "100m"
-            memory: "128Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 15
 
-          limits:
-            cpu: "500m"
-            memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
