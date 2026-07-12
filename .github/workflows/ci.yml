@@ -72,9 +72,10 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ${{ env.PROJECT_DIR }}
-          file: ${{ env.PROJECT_DIR }}/docker/Dockerfile
-          load: true
+          file: ${{ env.PROJECT_DIR }}/Dockerfile
           push: false
+          load: true            # loads the built image into the local daemon
+                                 # required for the smoke test below to find it
           tags: |
             node-app:${{ github.sha }}
             node-app:latest
@@ -88,3 +89,76 @@ jobs:
           sleep 5
           curl --fail http://localhost:3000/health
           docker rm -f smoke-test
+
+  # ── JOB 3: Push to Amazon ECR ────────────────────────────────────────────────
+  push:
+    name: Push to ECR
+    runs-on: ubuntu-latest
+    needs: [build]               # only push if build + smoke test passed
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    outputs:
+      registry: ${{ steps.ecr-login.outputs.registry }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Assumes an IAM role trusted for GitHub OIDC — no long-lived AWS keys stored as secrets
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Rebuild (cache from previous job means this is fast) and push both tags
+      - name: Build and push to ECR
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ env.PROJECT_DIR }}
+          file: ${{ env.PROJECT_DIR }}/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.ecr-login.outputs.registry }}/node-app:${{ github.sha }}
+            ${{ steps.ecr-login.outputs.registry }}/node-app:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── JOB 4: Deploy to EKS ─────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to EKS
+    runs-on: ubuntu-latest
+    needs: [push]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      # Point kubectl at the EKS cluster's control plane
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name my-cluster --region us-east-1
+
+      # Roll the Deployment to the freshly pushed commit-SHA-tagged image
+      # kubectl set image triggers a standard RollingUpdate — see docs/rolling-updates.md
+      - name: Deploy new image
+        run: |
+          kubectl set image deployment/nodejs-deployment \
+            node-app=${{ needs.push.outputs.registry }}/node-app:${{ github.sha }} \
+            -n default
+
+      # Block until the rollout finishes or fails — surfaces a stuck rollout as a CI failure
+      - name: Wait for rollout to complete
+        run: kubectl rollout status deployment/nodejs-deployment -n default --timeout=300s
