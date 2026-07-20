@@ -1,0 +1,35 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: nodejs-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nodejs-deployment       # must match an existing Deployment exactly
+
+  minReplicas: 2                  # never scale below this, even at zero load
+  maxReplicas: 6                  # hard ceiling, prevents runaway scaling
+
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 50  # target: average 50% CPU across all Pods
+
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0     # react immediately to spikes
+      policies:
+        - type: Percent
+          value: 100                    # can double replica count per step
+          periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 300   # wait 5 min before scaling down
+      policies:
+        - type: Pods
+          value: 1                      # remove at most 1 Pod per step
+          periodSeconds: 60
