@@ -1,0 +1,16 @@
+# -----------------------------------------------------------------------------
+# CLUSTERROLE
+#
+# Same shape as a Role, but not tied to one namespace. Nodes are cluster-scoped
+# resources (they don't belong to any namespace), so read access to them can
+# only be granted via a ClusterRole — a Role couldn't express this at all.
+# -----------------------------------------------------------------------------
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: node-reader-clusterrole
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
