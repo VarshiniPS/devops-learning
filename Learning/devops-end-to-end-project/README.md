@@ -626,3 +626,102 @@ updates by default.
 **Always build from project root** — both Dockerfiles use paths like
 `COPY app/app.js`, which only resolve correctly when the build context is the
 repository root, regardless of which `-f` target is used.
+
+## Kubernetes Networking
+
+### Kubernetes DNS & Service Discovery
+
+Every Service automatically gets a DNS name inside the cluster — no manual
+configuration needed. CoreDNS runs as a cluster-wide Pod and resolves these
+names for every other Pod.
+
+```
+<service-name>.<namespace>.svc.cluster.local
+```
+
+For our project: `nodejs-service.default.svc.cluster.local` — or just
+`nodejs-service` when called from within the same namespace.
+
+This is what makes Pods discoverable to each other without hardcoding IPs —
+Pod IPs are ephemeral and change on every restart, but the Service DNS name
+never changes.
+
+### Service Types
+
+| Type | Reachable from | Use case |
+|---|---|---|
+| `ClusterIP` (default) | Inside cluster only | Pod-to-Pod / microservice communication |
+| `NodePort` | Outside via `<NodeIP>:<NodePort>` | Dev/testing, bare-metal clusters |
+| `LoadBalancer` | Public internet (cloud only) | Production external traffic |
+| `ExternalName` | N/A — CNAME redirect | Pointing a Service at an external DNS name (e.g. an RDS database endpoint) |
+
+`ExternalName` doesn't proxy traffic or get a ClusterIP at all — it's a pure
+DNS-level CNAME. `my-db.default.svc.cluster.local` resolves directly to
+whatever external hostname you configured, useful for treating an external
+dependency (managed database, third-party API) as if it were an in-cluster
+Service.
+
+### CNI (Container Network Interface)
+
+The CNI plugin is what actually gives every Pod a real, routable IP address
+and wires up networking between nodes. Kubernetes itself doesn't implement
+networking — it delegates to a CNI plugin (Calico, Flannel, AWS VPC CNI on
+EKS, etc.). This is why Pod-to-Pod traffic works across different nodes
+without any manual routing — the CNI plugin handles it transparently.
+
+### Application → Service → Endpoints → Pods
+
+```
+Application (curl, browser, another Pod)
+      │
+      │  DNS lookup: nodejs-service.default.svc.cluster.local
+      ▼
+Service (ClusterIP)
+      │  virtual IP — never changes
+      │  uses label selector: app=nodejs-app
+      ▼
+Endpoints / EndpointSlice
+      │  the actual list of Pod IPs currently matching the selector
+      │  updated automatically as Pods become Ready or terminate
+      ▼
+Pod (one of several replicas)
+      │  containerPort: 3000
+      ▼
+Container → app.js route handler → response
+```
+
+The Service itself never touches a Pod directly — it's a layer of
+indirection. The **Endpoints** object (or **EndpointSlices** in newer
+clusters) is the real routing table, continuously updated as Pods pass or
+fail readiness checks. This is why `kubectl get endpoints` is the fastest
+ground-truth check when traffic isn't reaching a Pod — see Troubleshooting.
+
+### Networking Commands
+
+```bash
+# Service overview
+kubectl get svc
+kubectl describe svc nodejs-service
+
+# Endpoints — the real routing table behind a Service
+kubectl get endpoints
+kubectl get endpoints nodejs-service
+
+# EndpointSlices — the newer, scalable replacement for Endpoints
+kubectl get endpointslices
+kubectl describe endpointslice <slice-name>
+
+# Test DNS resolution from inside a Pod
+kubectl exec -it <pod-name> -- nslookup nodejs-service
+kubectl exec -it <pod-name> -- nslookup nodejs-service.default.svc.cluster.local
+
+# Test actual connectivity, not just DNS
+kubectl exec -it <pod-name> -- wget -qO- http://nodejs-service/health
+
+# Cross-check Endpoints IPs against real Pod IPs
+kubectl get pods -o wide
+```
+
+**Fast diagnostic:** `kubectl get endpoints <service-name>` is the single
+most useful networking command — if a Pod's IP is missing, it isn't
+receiving traffic, regardless of what `kubectl get pods` shows.
