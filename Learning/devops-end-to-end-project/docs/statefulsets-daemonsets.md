@@ -60,6 +60,26 @@ they need uniform presence on every node with no gaps:
 
 ---
 
+## Comparison: Deployment vs StatefulSet vs DaemonSet
+
+| | Deployment | StatefulSet | DaemonSet |
+|---|---|---|---|
+| **Pod identity** | Interchangeable — random suffix (e.g. `web-7f8b9-x2k4p`) | Stable, sequential (`mysql-0`, `mysql-1`) | One per matching node, named after the node |
+| **Replica count** | Set explicitly (`replicas: 3`) | Set explicitly (`replicas: 3`) | Not set — tied to node count automatically |
+| **Storage** | Pods typically share a volume, or are stateless | Each pod gets its own PVC, reattached on reschedule | Usually stateless, or reads host paths directly (e.g. `/var/log`) |
+| **Startup/shutdown order** | No ordering — all pods created/removed in parallel | Ordered — sequential create, reverse-order terminate | No ordering — one per node, independent of each other |
+| **Networking identity** | Shared Service VIP, no per-pod DNS needed | Per-pod stable DNS via headless Service | Often uses `hostNetwork: true` to bind to the node's own IP |
+| **Typical use case** | Stateless web apps, APIs | Databases, distributed systems needing per-replica identity | Node-level infrastructure: logging, monitoring, networking agents |
+| **Example** | nginx web server, REST API | MySQL, Kafka, ZooKeeper | Fluentd, Node Exporter, Filebeat |
+| **Scaling model** | Manually or via HPA, any number | Manually or via HPA, ordered | Automatic — follows cluster node count |
+
+**The one-line mental model for each:**
+- **Deployment** — "I want N identical, disposable copies of this, somewhere in the cluster."
+- **StatefulSet** — "I want N copies of this, each with its own permanent identity and storage, created and destroyed in a specific order."
+- **DaemonSet** — "I want exactly one copy of this on every node, automatically, with no gaps."
+
+---
+
 ## This exercise
 
 Built in `k8s/statefulsets-daemonsets/`:
