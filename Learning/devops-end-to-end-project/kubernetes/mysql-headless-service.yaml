@@ -1,0 +1,24 @@
+# -----------------------------------------------------------------------------
+# HEADLESS SERVICE
+#
+# StatefulSets require a "headless" Service (clusterIP: None) to provide
+# stable network identity. Instead of one shared virtual IP load-balancing
+# across pods, this gives each pod its own DNS entry:
+#   mysql-0.mysql.default.svc.cluster.local
+#   mysql-1.mysql.default.svc.cluster.local
+# so other pods can address a *specific* replica by name, not just "any pod."
+# -----------------------------------------------------------------------------
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  labels:
+    app: mysql
+spec:
+  clusterIP: None   # this is what makes it "headless"
+  selector:
+    app: mysql
+  ports:
+    - port: 3306
+      name: mysql

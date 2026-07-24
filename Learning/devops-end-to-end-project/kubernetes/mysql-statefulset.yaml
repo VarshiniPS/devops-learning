@@ -1,0 +1,52 @@
+# -----------------------------------------------------------------------------
+# STATEFULSET
+#
+# Demonstrates the four core StatefulSet properties:
+#   - Stable pod names: mysql-0, mysql-1, mysql-2 (via serviceName + ordinal)
+#   - Stable storage: each pod gets its own PVC from volumeClaimTemplates,
+#     and reattaches to the SAME PVC if rescheduled
+#   - Ordered deployment: mysql-0 must be Running/Ready before mysql-1 starts
+#   - Ordered termination: scaling down removes mysql-2 before mysql-1, etc.
+# -----------------------------------------------------------------------------
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+spec:
+  serviceName: mysql       # must match the headless Service above
+  replicas: 3
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mysql-secret
+                  key: root-password
+          ports:
+            - containerPort: 3306
+              name: mysql
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+  # Each replica gets its OWN PersistentVolumeClaim, created from this
+  # template — e.g. data-mysql-0, data-mysql-1, data-mysql-2 — rather than
+  # all pods sharing one volume.
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
