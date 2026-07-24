@@ -61,11 +61,8 @@ Built in `k8s/security/`:
 
 | File | Purpose |
 |---|---|
-| `sample-apps.yaml` | `frontend` and `backend` Deployments + a `backend` Service, used to demonstrate NetworkPolicy behavior |
-| `default-deny-all.yaml` | Locks down all ingress in the namespace by default |
-| `allow-frontend-to-backend.yaml` | Allows only pods labeled `app=frontend` to reach `backend` on port 80 |
-| `backend-egress-dns-only.yaml` | Restricts `backend`'s outbound traffic to DNS resolution only |
-| `securitycontext-example.yaml` | Hardened nginx Deployment: non-root user, read-only root filesystem, no privilege escalation, with `emptyDir` volumes for nginx's required writable paths |
+| `sample-apps.yaml` | `frontend` and hardened `backend` Deployments + a `backend` Service. `backend` runs `nginxinc/nginx-unprivileged`, non-root (UID 101), read-only root filesystem |
+| `networkpolicy.yaml` | Consolidated: default-deny-all ingress, allow `frontend` → `backend` on port 8080, and restrict `backend`'s egress to DNS only |
 
 ### Observing the behavior change
 
@@ -75,27 +72,28 @@ kubectl apply -f sample-apps.yaml
 # Before any policy: unrestricted
 kubectl exec -it deploy/frontend -- wget -qO- --timeout=2 backend   # succeeds
 
-kubectl apply -f default-deny-all.yaml
-kubectl exec -it deploy/frontend -- wget -qO- --timeout=2 backend   # now times out
-
-kubectl apply -f allow-frontend-to-backend.yaml
-kubectl exec -it deploy/frontend -- wget -qO- --timeout=2 backend   # succeeds again
+kubectl apply -f networkpolicy.yaml   # applies default-deny-all + allow-frontend-to-backend + egress rule together
+kubectl exec -it deploy/frontend -- wget -qO- --timeout=2 backend   # succeeds - frontend is explicitly allowed
 
 # Confirm scope: a pod that ISN'T labeled frontend still can't reach backend
 kubectl run test-pod --image=busybox --rm -it --restart=Never -- wget -qO- --timeout=2 backend
-# still times out - proves the allow rule is scoped to app=frontend specifically,
+# times out - proves the allow rule is scoped to app=frontend specifically,
 # not "networking reopened for everyone"
 ```
 
 ### Verifying securityContext
 
+`backend` itself is hardened (no separate demo deployment needed):
+
 ```bash
-kubectl apply -f securitycontext-example.yaml
-kubectl exec -it deploy/backend-hardened -- id
+kubectl exec -it deploy/backend -- id
 # uid=101 gid=101 -- confirms non-root
 
-kubectl exec -it deploy/backend-hardened -- touch /test-file
+kubectl exec -it deploy/backend -- touch /test-file
 # Read-only file system -- confirms readOnlyRootFilesystem is enforced
+
+kubectl exec -it deploy/backend -- touch /tmp/test-file
+# succeeds -- confirms the restriction is scoped to volumes, not a blanket failure
 ```
 
 ## Gotchas / things to remember
@@ -116,3 +114,18 @@ kubectl exec -it deploy/backend-hardened -- touch /test-file
 - `fsGroup` matters specifically when combining `runAsUser` with a
   mounted volume — without it, a non-root process frequently can't
   write to a volume that's owned by root by default.
+
+## Real incident from this exercise
+
+First attempt at hardening used stock `nginx` with `runAsUser: 101` +
+`readOnlyRootFilesystem: true` + `containerPort: 8080`. The container
+failed to become `Ready` (`kubectl exec` errored with "container not
+found"), because stock nginx's config still said `listen 80` — the
+`containerPort` change alone doesn't reconfigure the application inside
+the container. Switched to `nginxinc/nginx-unprivileged:stable`, a
+purpose-built image that already listens on 8080 and already tolerates
+non-root/read-only constraints, which resolved it immediately.
+**Lesson:** `securityContext` restrictions often require an image
+actually built to tolerate them — bolting hardening flags onto an
+arbitrary image's defaults is a common source of silent startup
+failures, not just a config nitpick.
