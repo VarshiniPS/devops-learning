@@ -1,0 +1,18 @@
+# -----------------------------------------------------------------------------
+# DEFAULT DENY ALL (INGRESS)
+#
+# podSelector: {} matches EVERY pod in this namespace. Because this policy
+# selects them, all matched pods flip from "unrestricted" to "deny by
+# default" for ingress traffic. Since no `ingress:` rules are listed at all,
+# NOTHING is allowed in -- this is the deliberate "lock the whole namespace
+# down" starting point, before layering specific allow rules on top.
+# -----------------------------------------------------------------------------
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress

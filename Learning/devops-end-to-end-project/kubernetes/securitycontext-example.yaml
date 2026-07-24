@@ -1,0 +1,57 @@
+# -----------------------------------------------------------------------------
+# SECURITY CONTEXT EXAMPLE
+#
+# Demonstrates all five hardening settings on a single pod/container.
+# Applying this to nginx specifically requires a couple of adjustments
+# (nginx normally wants to run as root and write to certain paths), which
+# is realistic -- hardening containers often means adjusting the app/image
+# to tolerate these restrictions, not just bolting settings on blindly.
+# -----------------------------------------------------------------------------
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-hardened
+  labels:
+    app: backend-hardened
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend-hardened
+  template:
+    metadata:
+      labels:
+        app: backend-hardened
+    spec:
+      # Pod-level: applies as defaults to all containers in the pod
+      securityContext:
+        runAsUser: 101        # nginx's own non-root user in official images
+        runAsGroup: 101
+        fsGroup: 101           # mounted volumes become writable by this group
+
+      containers:
+        - name: backend
+          image: nginx
+          ports:
+            - containerPort: 8080   # non-privileged port; root normally needed for <1024
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            # nginx needs SOME writable paths even when hardened -- these
+            # emptyDir volumes provide writable space without needing a
+            # writable root filesystem.
+            - name: tmp
+              mountPath: /tmp
+            - name: var-run
+              mountPath: /var/run
+            - name: var-cache-nginx
+              mountPath: /var/cache/nginx
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: var-run
+          emptyDir: {}
+        - name: var-cache-nginx
+          emptyDir: {}

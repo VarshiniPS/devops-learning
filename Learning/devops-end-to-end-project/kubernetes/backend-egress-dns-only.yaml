@@ -1,0 +1,32 @@
+# -----------------------------------------------------------------------------
+# RESTRICT BACKEND EGRESS TO DNS ONLY
+#
+# Demonstrates egress control: backend pods can ONLY send outbound traffic
+# to kube-dns/CoreDNS (needed for any DNS resolution at all -- without this,
+# even internal service name lookups would break). All other outbound
+# traffic from backend, including to arbitrary external IPs, is blocked.
+# This is the kind of rule that limits data exfiltration if backend were
+# ever compromised.
+# -----------------------------------------------------------------------------
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-egress-dns-only
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
