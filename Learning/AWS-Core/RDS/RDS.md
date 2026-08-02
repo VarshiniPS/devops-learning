@@ -74,3 +74,8 @@ Amazon RDS provides default parameter groups with standard settings, and you can
 - Static cluster parameters must be changed and then the DB cluster must be rebooted for the changes to take effect. The Apply method shows pending-reboot.
 - Dynamic cluster parameters take effect immediately without rebooting the DB cluster. The Apply method shows immediate.
 
+## 5. Security Group Access for DB
+
+Security groups in a VPC control inbound and outbound traffic for the DB instance. By default, network access to the DB instance is turned off until you explicitly allow it.
+
+You can create rules to allow access based on an IP range, a specific port, or another security group. In AWS, you can specify up to 20 rules in a security group.
