@@ -49,3 +49,28 @@ Multi-AZ RDS deployments provide enhanced durability and availability for your R
 - Snapshots are used for restoring the database to a specific captured state.
 - Both automated backups and snapshots are stored in Amazon S3.
 - The storage used by automated backups is included in your RDS storage allocation, while snapshots use additional storage.
+
+## 4. Parameter Groups in RDS
+
+Parameter groups in RDS are containers that hold database configuration values and apply them to one or more DB instances or DB clusters.
+
+Amazon RDS provides default parameter groups with standard settings, and you can also create your own custom parameter groups with your preferred configuration values.
+
+### DB Parameter Groups
+- A DB parameter group acts as a container for engine configuration values applied to one or more DB instances.
+- If you do not create a DB parameter group while creating a DB instance, RDS uses the default parameter group with default engine settings.
+- Some parameters in the default group may not be modifiable.
+
+### DB Cluster Parameter Groups
+- DB cluster parameter groups apply to Multi-AZ DB clusters only.
+- In a Multi-AZ DB cluster, the settings in the DB cluster parameter group are applied to all DB instances in the cluster.
+- The same rule applies here: if no custom parameter group is created, the default group is used.
+
+### Static and Dynamic Parameters
+- Static parameters require a reboot after being changed and saved in the parameter group. In that case, the Apply method shows as pending-reboot.
+- Dynamic parameters take effect immediately after the change, so no reboot is required. In that case, the Apply method shows as immediate.
+
+### Static and Dynamic Cluster Parameters
+- Static cluster parameters must be changed and then the DB cluster must be rebooted for the changes to take effect. The Apply method shows pending-reboot.
+- Dynamic cluster parameters take effect immediately without rebooting the DB cluster. The Apply method shows immediate.
+
