@@ -31,3 +31,21 @@ Multi-AZ RDS deployments provide enhanced durability and availability for your R
 ## Key Difference
 - Multi-AZ is mainly for high availability and failover protection.
 - Read Replicas are mainly for scaling read traffic and reducing load on the primary database.
+
+## 3. Automated Backups and Snapshots
+
+### Automated Backups
+- Automated backups are taken by AWS Backup service automatically during the defined backup window each day.
+- They are created automatically and are useful for point-in-time recovery.
+- Automated backups are retained for a specified retention period, typically from 7 to 35 days by default.
+
+### RDS Snapshots
+- RDS snapshots are user-initiated and are manual backups taken at a specific time.
+- They are retained until you manually delete them.
+- Snapshots can be used to restore your DB instance to the exact state captured at the time of the snapshot.
+
+### Key Differences
+- Automated backups support point-in-time recovery to any second within the retention period.
+- Snapshots are used for restoring the database to a specific captured state.
+- Both automated backups and snapshots are stored in Amazon S3.
+- The storage used by automated backups is included in your RDS storage allocation, while snapshots use additional storage.
